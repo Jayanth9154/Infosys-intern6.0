@@ -134,4 +134,3 @@ Real-time: WebSocket for instant telemetry updates on map/battery views.
 
 Development Mode: Backend falls back to mock data if Firestore/Firebase unavailable.
 
-This structure enables scalable EV fleet management with real-time monitoring. For PPT slides, focus on architecture diagram, feature screenshots, and code snippets from key files like VehicleController or TelemetryService. If you need code for specific slides, let me know!
