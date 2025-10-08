@@ -1,0 +1,12 @@
+com\neurofleet\security\SecurityConfig.class
+com\neurofleet\controller\VehicleController.class
+com\neurofleet\NeuroFleetApplication.class
+com\neurofleet\controller\ProfileController.class
+com\neurofleet\security\FirebaseAuthenticationFilter.class
+com\neurofleet\websocket\RawWebSocketHandler.class
+com\neurofleet\config\FirestoreConfig.class
+com\neurofleet\config\FirebaseConfig.class
+com\neurofleet\config\WebSocketConfig.class
+com\neurofleet\controller\AuthController.class
+com\neurofleet\service\TelemetryService.class
+com\neurofleet\config\CorsConfig.class

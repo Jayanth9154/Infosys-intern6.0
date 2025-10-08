@@ -1,0 +1,13 @@
+package com.neurofleet;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
+
+@SpringBootApplication
+@EnableScheduling
+public class NeuroFleetApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(NeuroFleetApplication.class, args);
+    }
+}
