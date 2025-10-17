@@ -1,28 +1,88 @@
-import React, { useState, useContext } from 'react';
-import { AuthProvider, AuthContext } from './AuthContext';
+import React, { useState, useEffect, useContext } from 'react';
+import axios from 'axios';
+import { AuthContext, AuthProvider } from './AuthContext';
+import LogoutButton from './LogoutButton';
+import AuthComponent from './AuthComponent';
+import Alert from './Alert';
+import Notifications from './Notifications';
+import DashboardMap from './DashboardMap';
 import VehicleList from './VehicleList';
+import VehicleInventory from './VehicleInventory';
+import VehicleMap from './VehicleMap';
 import VehicleForm from './VehicleForm';
 import UpdateForm from './UpdateForm';
-import VehicleMap from './VehicleMap';
-import AuthComponent from './AuthComponent';
-import AdminPanel from './AdminPanel';
-import Profile from './Profile';
-import Notifications from './Notifications';
 import BatteryMonitoring from './BatteryMonitoring';
-import VehicleInventory from './VehicleInventory';
 import CustomerBooking from './CustomerBooking';
 import PredictiveMaintenance from './PredictiveMaintenance';
 import RouteOptimization from './RouteOptimization';
-import LogoutButton from './LogoutButton';
+import AdminPanel from './AdminPanel';
+import Profile from './Profile';
+import { API_BASE_URL } from './config';
 
 function AppContent() {
   const [refreshList, setRefreshList] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [fleetMetrics, setFleetMetrics] = useState({ loading: false, error: null, data: null });
   const { currentUser, role } = useContext(AuthContext);
+  const [alert, setAlert] = useState(null);
+
+  // Add event listener for navigation events
+  useEffect(() => {
+    const handleNavigation = (event) => {
+      if (event.detail) {
+        setActiveTab(event.detail);
+      }
+    };
+
+    window.addEventListener('navigateToTab', handleNavigation);
+    
+    return () => {
+      window.removeEventListener('navigateToTab', handleNavigation);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancel = false;
+    const fetchMetrics = async () => {
+      if (!currentUser) {
+        setFleetMetrics({ loading: false, error: null, data: null });
+        return;
+      }
+
+      setFleetMetrics(prev => ({ ...prev, loading: true, error: null }));
+
+      try {
+        const token = await currentUser.getIdToken();
+        const response = await axios.get(`${API_BASE_URL}/api/vehicles/status-distribution`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!cancel) {
+          setFleetMetrics({ loading: false, error: null, data: response.data });
+        }
+      } catch (error) {
+        console.error('Failed to load fleet metrics:', error);
+        if (!cancel) {
+          setFleetMetrics({ loading: false, error: 'Unable to load fleet metrics', data: null });
+        }
+      }
+    };
+
+    fetchMetrics();
+    const interval = setInterval(fetchMetrics, 60000);
+
+    return () => {
+      cancel = true;
+      clearInterval(interval);
+    };
+  }, [currentUser]);
 
   const handleVehicleAdded = () => {
     setRefreshList(prev => !prev);
+    setAlert({
+      message: 'Vehicle added successfully!',
+      type: 'success'
+    });
   };
 
   const handleEdit = (vehicle) => {
@@ -32,9 +92,13 @@ function AppContent() {
   const handleUpdateComplete = () => {
     setEditingVehicle(null);
     setRefreshList(prev => !prev);
+    setAlert({
+      message: 'Vehicle updated successfully!',
+      type: 'success'
+    });
   };
 
-  // Navigation items based on user role
+  // Navigation items - make all features available to all users
   const getNavigationItems = () => {
     const items = [
       { id: 'dashboard', label: 'Dashboard', icon: '📊' },
@@ -44,12 +108,9 @@ function AppContent() {
       { id: 'battery', label: 'Battery', icon: '🔋' },
       { id: 'booking', label: 'Customer Booking', icon: '📅' },
       { id: 'maintenance', label: 'Maintenance', icon: '🔧' },
-      { id: 'routes', label: 'Route Optimization', icon: '🛣️' }
+      { id: 'routes', label: 'Route Optimization', icon: '🛣️' },
+      { id: 'admin', label: 'Admin', icon: '⚙️' } // Make admin panel available to all users
     ];
-
-    if (role === 'admin') {
-      items.push({ id: 'admin', label: 'Admin', icon: '⚙️' });
-    }
 
     items.push({ id: 'profile', label: 'Profile', icon: '👤' });
 
@@ -63,29 +124,42 @@ function AppContent() {
         return (
           <div className="dashboard-layout">
             <div className="dashboard-main">
-              <VehicleMap />
+              <DashboardMap />
               <div className="dashboard-stats">
                 <div className="stat-card">
                   <h3>Total Vehicles</h3>
-                  <div className="stat-value">{Math.floor(Math.random() * 50) + 20}</div>
+                  <div className="stat-value">
+                    {fleetMetrics.loading ? '—' : fleetMetrics.data?.totalVehicles ?? '0'}
+                  </div>
                   <div className="stat-label">Active Fleet</div>
                 </div>
                 <div className="stat-card">
                   <h3>On Trip</h3>
-                  <div className="stat-value">{Math.floor(Math.random() * 15) + 5}</div>
+                  <div className="stat-value">
+                    {fleetMetrics.loading ? '—' : fleetMetrics.data?.activeTrips ?? '0'}
+                  </div>
                   <div className="stat-label">Currently in use</div>
                 </div>
                 <div className="stat-card">
                   <h3>Available</h3>
-                  <div className="stat-value">{Math.floor(Math.random() * 20) + 10}</div>
+                  <div className="stat-value">
+                    {fleetMetrics.loading ? '—' : fleetMetrics.data?.availableVehicles ?? '0'}
+                  </div>
                   <div className="stat-label">Ready for service</div>
                 </div>
                 <div className="stat-card">
                   <h3>Charging</h3>
-                  <div className="stat-value">{Math.floor(Math.random() * 8) + 2}</div>
+                  <div className="stat-value">
+                    {fleetMetrics.loading ? '—' : fleetMetrics.data?.chargingVehicles ?? '0'}
+                  </div>
                   <div className="stat-label">At charging stations</div>
                 </div>
               </div>
+              {fleetMetrics.error && (
+                <div className="panel" style={{ marginTop: 16 }}>
+                  <strong>Warning:</strong> {fleetMetrics.error}
+                </div>
+              )}
             </div>
             <div className="dashboard-sidebar">
               <VehicleList refreshTrigger={refreshList} onEdit={handleEdit} />
@@ -103,7 +177,8 @@ function AppContent() {
         return (
           <div className="two-column-layout">
             <div>
-              {role === 'admin' && !editingVehicle && (
+              {/* Make vehicle form available to all users, not just admins */}
+              {!editingVehicle && (
                 <VehicleForm onVehicleAdded={handleVehicleAdded} />
               )}
               {editingVehicle && (
@@ -148,6 +223,13 @@ function AppContent() {
 
   return (
     <div className="app-container">
+      {alert && (
+        <Alert 
+          message={alert.message} 
+          type={alert.type} 
+          onClose={() => setAlert(null)} 
+        />
+      )}
       <Notifications />
       
       <header className="app-header">
@@ -159,7 +241,7 @@ function AppContent() {
           {currentUser && (
             <div className="user-info">
               <span className="user-email">{currentUser.email}</span>
-              <span className="user-role">{role}</span>
+              <span className="user-role">{role || 'User'}</span>
               <LogoutButton />
             </div>
           )}
@@ -180,6 +262,9 @@ function AppContent() {
                 >
                   <span className="nav-icon">{item.icon}</span>
                   <span className="nav-label">{item.label}</span>
+                  {item.id === 'vehicles' && (
+                    <span className="nav-badge">+</span>
+                  )}
                 </li>
               ))}
             </ul>
@@ -284,6 +369,7 @@ function AppContent() {
           padding: 12px 24px;
           cursor: pointer;
           transition: background-color 0.2s;
+          position: relative;
         }
         
         .nav-item:hover {
@@ -298,6 +384,21 @@ function AppContent() {
         .nav-icon {
           margin-right: 12px;
           font-size: 18px;
+        }
+        
+        .nav-badge {
+          position: absolute;
+          right: 12px;
+          background-color: #10b981;
+          color: white;
+          border-radius: 50%;
+          width: 20px;
+          height: 20px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 12px;
+          font-weight: bold;
         }
         
         .main-content {
@@ -332,25 +433,42 @@ function AppContent() {
           flex-direction: column;
         }
         
-        .stat-card h3 {
-          margin: 0 0 12px 0;
-          font-size: 16px;
-          color: #94a3b8;
-        }
-        
         .stat-value {
-          font-size: 32px;
+          font-size: 24px;
           font-weight: bold;
-          margin-bottom: 8px;
+          color: #3b82f6;
+          margin: 8px 0;
         }
         
         .stat-label {
-          font-size: 14px;
+          font-size: 12px;
           color: #94a3b8;
+          text-transform: uppercase;
         }
         
-        .dashboard-sidebar {
-          width: 100%;
+        .login-prompt {
+          max-width: 600px;
+          margin: 40px auto;
+          text-align: center;
+        }
+        
+        .feature-list {
+          text-align: left;
+          margin-top: 32px;
+        }
+        
+        .feature-list li {
+          margin-bottom: 12px;
+          padding-left: 24px;
+          position: relative;
+        }
+        
+        .feature-list li:before {
+          content: "✓";
+          color: #10b981;
+          position: absolute;
+          left: 0;
+          font-weight: bold;
         }
         
         .two-column-layout {
@@ -359,31 +477,279 @@ function AppContent() {
           gap: 24px;
         }
         
-        .login-prompt {
-          max-width: 600px;
-          margin: 48px auto;
-          text-align: center;
+        /* Button Styles */
+        .button {
+          padding: 10px 16px;
+          border-radius: 6px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          border: none;
+          font-size: 14px;
         }
         
-        .feature-list {
-          text-align: left;
-          margin-top: 24px;
-          padding-left: 24px;
-        }
-        
-        .feature-list li {
-          margin-bottom: 8px;
-        }
-        
-        .step-indicator {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          background-color: #334155;
-        }
-        
-        .step-indicator.active {
+        .button.primary {
           background-color: #3b82f6;
+          color: white;
+        }
+        
+        .button.primary:hover:not(:disabled) {
+          background-color: #2563eb;
+        }
+        
+        .button.outline {
+          background-color: transparent;
+          border: 1px solid #3b82f6;
+          color: #3b82f6;
+        }
+        
+        .button.outline:hover:not(:disabled) {
+          background-color: rgba(59, 130, 246, 0.1);
+        }
+        
+        .button.danger {
+          background-color: #dc2626;
+          color: white;
+        }
+        
+        .button.danger:hover:not(:disabled) {
+          background-color: #b91c1c;
+        }
+        
+        .button:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+        
+        /* Input Styles */
+        .input, .select, .textarea {
+          padding: 10px 12px;
+          border-radius: 6px;
+          border: 1px solid #334155;
+          background-color: #1e293b;
+          color: #e2e8f0;
+          font-size: 14px;
+        }
+        
+        .input:focus, .select:focus, .textarea:focus {
+          outline: none;
+          border-color: #3b82f6;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+        }
+        
+        .panel {
+          background-color: #1e293b;
+          border-radius: 12px;
+          padding: 24px;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+          border: 1px solid #334155;
+          margin-bottom: 24px;
+        }
+        
+        .panel h2 {
+          margin-top: 0;
+          color: #f8fafc;
+        }
+        
+        .row {
+          display: flex;
+          gap: 12px;
+        }
+        
+        /* Battery Card Styles */
+        .battery-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+          gap: 16px;
+          margin-bottom: 24px;
+        }
+        
+        .battery-card {
+          background-color: #1f2937;
+          border-radius: 8px;
+          padding: 16px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          border: 1px solid #374151;
+        }
+        
+        .battery-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .battery-card.selected {
+          border: 2px solid #3b82f6;
+        }
+        
+        .battery-card-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 12px;
+        }
+        
+        .battery-card-header h3 {
+          margin: 0;
+          font-size: 16px;
+        }
+        
+        .battery-level-container {
+          height: 24px;
+          background-color: #374151;
+          border-radius: 12px;
+          position: relative;
+          overflow: hidden;
+          margin-bottom: 12px;
+        }
+        
+        .battery-level-container.small {
+          height: 16px;
+          width: 100px;
+        }
+        
+        .battery-level {
+          height: 100%;
+          transition: width 0.5s ease;
+        }
+        
+        .battery-level.high {
+          background-color: #10b981;
+        }
+        
+        .battery-level.medium {
+          background-color: #f59e0b;
+        }
+        
+        .battery-level.low {
+          background-color: #ef4444;
+        }
+        
+        .battery-percentage {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          color: white;
+          font-weight: bold;
+        }
+        
+        .battery-percentage.small {
+          font-size: 12px;
+        }
+        
+        .battery-details {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        
+        .detail-item {
+          display: flex;
+          justify-content: space-between;
+        }
+        
+        .detail-label {
+          color: #9ca3af;
+        }
+        
+        .detail-value {
+          font-weight: bold;
+        }
+        
+        .battery-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 24px;
+        }
+        
+        .battery-table th, .battery-table td {
+          padding: 12px;
+          text-align: left;
+          border-bottom: 1px solid #374151;
+        }
+        
+        .battery-table tr.selected {
+          background-color: rgba(59, 130, 246, 0.1);
+        }
+        
+        .battery-table tr:hover {
+          background-color: rgba(255, 255, 255, 0.05);
+        }
+        
+        @media (max-width: 768px) {
+          .app-nav {
+            width: 80px;
+          }
+          
+          .nav-label {
+            display: none;
+          }
+          
+          .nav-icon {
+            margin-right: 0;
+            font-size: 20px;
+          }
+          
+          .dashboard-layout {
+            grid-template-columns: 1fr;
+          }
+          
+          .dashboard-sidebar {
+            order: -1;
+          }
+          
+          .dashboard-stats {
+            grid-template-columns: repeat(2, 1fr);
+          }
+          
+          .two-column-layout {
+            grid-template-columns: 1fr;
+          }
+          
+          .row {
+            flex-direction: column;
+          }
+        }
+        
+        @media (max-width: 768px) {
+          .battery-grid {
+            grid-template-columns: 1fr;
+          }
+          
+          .battery-table {
+            font-size: 14px;
+          }
+          
+          .battery-table th, 
+          .battery-table td {
+            padding: 8px;
+          }
+          
+          .battery-card-header h3 {
+            font-size: 14px;
+          }
+          
+          .detail-item {
+            flex-direction: column;
+            gap: 2px;
+          }
+        }
+        
+        @media (max-width: 480px) {
+          .app-header {
+            flex-direction: column;
+            gap: 12px;
+            text-align: center;
+          }
+          
+          .header-right {
+            justify-content: center;
+          }
+          
+          .dashboard-stats {
+            grid-template-columns: 1fr;
+          }
         }
       `}</style>
     </div>

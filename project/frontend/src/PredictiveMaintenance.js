@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import { AuthContext } from './AuthContext';
+import { API_BASE_URL } from './config';
 
 function PredictiveMaintenance() {
   const { currentUser } = useContext(AuthContext);
@@ -22,7 +23,7 @@ function PredictiveMaintenance() {
       try {
         setLoading(true);
         const token = await currentUser.getIdToken();
-        const response = await axios.get('http://localhost:3001/api/vehicles', {
+        const response = await axios.get(`${API_BASE_URL}/api/vehicles`, {
           headers: { Authorization: `Bearer ${token}` }
         });
 
@@ -718,6 +719,57 @@ function PredictiveMaintenance() {
         .info-value {
           font-weight: bold;
           color: #f8fafc;
+        }
+        
+        @media (max-width: 768px) {
+          .maintenance-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 16px;
+          }
+          
+          .maintenance-summary {
+            width: 100%;
+            justify-content: space-between;
+          }
+          
+          .maintenance-dashboard {
+            grid-template-columns: 1fr;
+            gap: 16px;
+          }
+          
+          .component-health-grid {
+            grid-template-columns: 1fr 1fr;
+          }
+          
+          .service-info-grid {
+            grid-template-columns: 1fr;
+          }
+          
+          .vehicle-health-list {
+            max-height: 300px;
+          }
+        }
+        
+        @media (max-width: 480px) {
+          .component-health-grid {
+            grid-template-columns: 1fr;
+          }
+          
+          .vehicle-health-summary {
+            flex-direction: column;
+            gap: 8px;
+          }
+          
+          .alert {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+          }
+          
+          .alert-time {
+            align-self: flex-end;
+          }
         }
       `}</style>
     </div>

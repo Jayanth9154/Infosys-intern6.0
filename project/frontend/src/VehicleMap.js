@@ -2,12 +2,27 @@ import React, { useState, useEffect, useRef, useContext } from 'react';
 import { Wrapper } from '@googlemaps/react-wrapper';
 import axios from 'axios';
 import { AuthContext } from './AuthContext';
+import VehicleSearch from './VehicleSearch';
+import { API_BASE_URL, WS_BASE_URL } from './config';
 
 const render = (status) => {
   return <div className="panel"><h2>{status}</h2></div>;
 };
 
-function MapComponent({ vehicles, center, zoom, geofences, selectedVehicle, onVehicleSelect, showHeatmap, heatmapData }) {
+// Function to calculate distance between two points (Haversine formula)
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371; // Radius of the earth in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c; // Distance in km
+};
+
+function MapComponent({ vehicles, center, zoom, geofences, selectedVehicle, onVehicleSelect, showHeatmap, heatmapData, userLocation }) {
   const ref = useRef(null);
   const [map, setMap] = useState(null);
   const [markers, setMarkers] = useState({});
@@ -15,6 +30,7 @@ function MapComponent({ vehicles, center, zoom, geofences, selectedVehicle, onVe
   const [infoWindows, setInfoWindows] = useState({});
   const [paths, setVehiclePaths] = useState({});
   const [heatmapLayer, setHeatmapLayer] = useState(null);
+  const [userMarker, setUserMarker] = useState(null);
 
   // Initialize map
   useEffect(() => {
@@ -106,8 +122,9 @@ function MapComponent({ vehicles, center, zoom, geofences, selectedVehicle, onVe
             <div style="padding: 8px; max-width: 200px;">
               <h3 style="margin: 0 0 8px 0; color: #0b1220;">${make} ${model}</h3>
               <p style="margin: 4px 0; color: #1f2937;">Status: <span style="font-weight: bold;">${status}</span></p>
-              <p style="margin: 4px 0; color: #1f2937;">Speed: ${speed} km/h</p>
-              <p style="margin: 4px 0; color: #1f2937;">Battery: ${batteryLevel || 'N/A'}%</p>
+              <p style="margin: 4px 0; color: #1f2937;">Speed: ${parseFloat(speed || 0).toFixed(2)} km/h</p>
+              <p style="margin: 4px 0; color: #1f2937;">Battery: ${parseFloat(batteryLevel || 0).toFixed(2)}%</p>
+              <p style="margin: 4px 0; color: #1f2937;">Location: ${parseFloat(latitude).toFixed(4)}, ${parseFloat(longitude).toFixed(4)}</p>
             </div>
           `;
           
@@ -126,13 +143,13 @@ function MapComponent({ vehicles, center, zoom, geofences, selectedVehicle, onVe
             icon: {
               path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
               scale: 5,
-              fillColor: status === 'active' ? '#22d3ee' : status === 'maintenance' ? '#f59e0b' : '#ef4444',
+              fillColor: status === 'on-trip' ? '#22d3ee' : status === 'maintenance' ? '#f59e0b' : status === 'charging' ? '#3b82f6' : '#ef4444',
               fillOpacity: 1,
               strokeWeight: 1,
               strokeColor: '#06b6d4',
-              rotation: 0
+              rotation: Math.random() * 360 // Random initial rotation
             },
-            zIndex: status === 'active' ? 3 : 1
+            zIndex: status === 'on-trip' ? 3 : 1
           });
           
           // Add click listener
@@ -177,14 +194,23 @@ function MapComponent({ vehicles, center, zoom, geofences, selectedVehicle, onVe
           // Update marker position
           marker.setPosition(position);
           
+          // Update marker icon color based on status
+          const currentIcon = marker.getIcon();
+          if (currentIcon && typeof currentIcon === 'object') {
+            const icon = { ...currentIcon };
+            icon.fillColor = status === 'on-trip' ? '#22d3ee' : status === 'maintenance' ? '#f59e0b' : status === 'charging' ? '#3b82f6' : '#ef4444';
+            marker.setIcon(icon);
+          }
+          
           // Update info window content
           if (updatedInfoWindows[id]) {
             const contentString = `
               <div style="padding: 8px; max-width: 200px;">
                 <h3 style="margin: 0 0 8px 0; color: #0b1220;">${make || 'Unknown'} ${model || 'Vehicle'}</h3>
                 <p style="margin: 4px 0; color: #1f2937;">Status: <span style="font-weight: bold;">${status || 'Unknown'}</span></p>
-                <p style="margin: 4px 0; color: #1f2937;">Speed: ${speed || 0} km/h</p>
-                <p style="margin: 4px 0; color: #1f2937;">Battery: ${batteryLevel || 'N/A'}%</p>
+                <p style="margin: 4px 0; color: #1f2937;">Speed: ${parseFloat(speed || 0).toFixed(2)} km/h</p>
+                <p style="margin: 4px 0; color: #1f2937;">Battery: ${parseFloat(batteryLevel || 0).toFixed(2)}%</p>
+                <p style="margin: 4px 0; color: #1f2937;">Location: ${parseFloat(latitude).toFixed(4)}, ${parseFloat(longitude).toFixed(4)}</p>
               </div>
             `;
             updatedInfoWindows[id].setContent(contentString);
@@ -336,11 +362,43 @@ function MapComponent({ vehicles, center, zoom, geofences, selectedVehicle, onVe
     }
   }, [map, showHeatmap, heatmapData]);
 
+  // Handle user location marker
+  useEffect(() => {
+    if (!map || !userLocation || !window.google?.maps) return;
+
+    // Remove existing user marker
+    if (userMarker) {
+      userMarker.setMap(null);
+    }
+
+    // Create new user marker
+    const marker = new window.google.maps.Marker({
+      position: { lat: userLocation.lat, lng: userLocation.lng },
+      map,
+      title: 'Your Location',
+      icon: {
+        path: window.google.maps.SymbolPath.CIRCLE,
+        scale: 8,
+        fillColor: '#3b82f6',
+        fillOpacity: 1,
+        strokeColor: '#ffffff',
+        strokeWeight: 2
+      },
+      zIndex: 1000
+    });
+
+    setUserMarker(marker);
+
+    // Center map on user location
+    map.panTo({ lat: userLocation.lat, lng: userLocation.lng });
+
+  }, [map, userLocation]);
+
   return <div ref={ref} style={{ width: '100%', height: 420, borderRadius: 14 }} />;
 }
 
 function VehicleMap() {
-  const { currentUser } = useContext(AuthContext);
+  const { currentUser, role } = useContext(AuthContext);
   const [vehicles, setVehicles] = useState([]);
   const [geofences, setGeofences] = useState([]);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
@@ -350,6 +408,12 @@ function VehicleMap() {
   const [error, setError] = useState(null);
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [heatmapData, setHeatmapData] = useState([]);
+  const [userLocation, setUserLocation] = useState(null);
+  const [watchId, setWatchId] = useState(null);
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showNearbyOnly, setShowNearbyOnly] = useState(false);
+  const [nearbyRadius, setNearbyRadius] = useState(5); // km
 
   // Fetch initial vehicle data
   useEffect(() => {
@@ -359,14 +423,14 @@ function VehicleMap() {
       try {
         setLoading(true);
         const token = await currentUser.getIdToken();
-        const response = await axios.get('http://localhost:3001/api/vehicles', {
+        const response = await axios.get(`${API_BASE_URL}/api/vehicles`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         
         // Add default location data if not present
         const vehiclesWithLocation = response.data.map(vehicle => ({
           ...vehicle,
-          latitude: vehicle.latitude || 28.6139 + (Math.random() * 0.1),
+          latitude: vehicle.latitude || 28.4595 + (Math.random() * 0.1),
           longitude: vehicle.longitude || 77.2090 + (Math.random() * 0.1),
           speed: vehicle.speed || Math.floor(Math.random() * 60),
           batteryLevel: vehicle.batteryLevel || Math.floor(Math.random() * 100)
@@ -428,11 +492,66 @@ function VehicleMap() {
     fetchGeofences();
   }, [currentUser]);
 
+  // Filter vehicles based on status, search term, and proximity
+  const filteredVehicles = vehicles.filter(vehicle => {
+    const matchesStatus = filterStatus === 'all' || vehicle.status === filterStatus;
+    const matchesSearch = !searchTerm || 
+      vehicle.make?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      vehicle.model?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      vehicle.licensePlate?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // If showNearbyOnly is enabled and we have user location, filter by proximity
+    if (showNearbyOnly && userLocation) {
+      const distance = calculateDistance(
+        userLocation.lat, 
+        userLocation.lng, 
+        vehicle.latitude, 
+        vehicle.longitude
+      );
+      return matchesStatus && matchesSearch && distance <= nearbyRadius;
+    }
+    
+    return matchesStatus && matchesSearch;
+  });
+
+  // Get user location
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      console.error('Geolocation is not supported by this browser.');
+      return;
+    }
+
+    const id = navigator.geolocation.watchPosition(
+      (position) => {
+        setUserLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        });
+      },
+      (error) => {
+        console.error('Error getting user location:', error);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 0
+      }
+    );
+
+    setWatchId(id);
+
+    return () => {
+      if (watchId) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
+  }, []);
+
   // WebSocket connection for real-time updates
   useEffect(() => {
     if (mapMode !== 'live') return;
     
-    const ws = new WebSocket('ws://localhost:3001');
+    const ws = new WebSocket(`${WS_BASE_URL}`);
 
     ws.onopen = () => {
       console.log('Connected to WebSocket server');
@@ -453,6 +572,9 @@ function VehicleMap() {
               latitude: data.latitude,
               longitude: data.longitude,
               speed: data.speed,
+              batteryLevel: data.batteryLevel,
+              range: data.range,
+              status: data.status,
               lastUpdated: new Date().toISOString()
             };
             return updatedVehicles;
@@ -460,14 +582,15 @@ function VehicleMap() {
             // Add new vehicle
             return [...prevVehicles, {
               id: data.id,
-              make: 'Unknown',
-              model: 'Vehicle',
-              licensePlate: 'TBD',
-              status: 'active',
+              make: data.make || 'Unknown',
+              model: data.model || 'Vehicle',
+              licensePlate: data.licensePlate || 'TBD',
+              status: data.status || 'available',
               latitude: data.latitude,
               longitude: data.longitude,
               speed: data.speed,
-              batteryLevel: Math.floor(Math.random() * 100),
+              batteryLevel: data.batteryLevel,
+              range: data.range,
               lastUpdated: new Date().toISOString()
             }];
           }
@@ -516,12 +639,12 @@ function VehicleMap() {
     }
   };
 
-  const center = vehicles.length > 0 ?
+  const center = userLocation || (filteredVehicles.length > 0 ?
     { 
-      lat: vehicles.reduce((sum, v) => sum + v.latitude, 0) / vehicles.length,
-      lng: vehicles.reduce((sum, v) => sum + v.longitude, 0) / vehicles.length
+      lat: filteredVehicles.reduce((sum, v) => sum + v.latitude, 0) / filteredVehicles.length,
+      lng: filteredVehicles.reduce((sum, v) => sum + v.longitude, 0) / filteredVehicles.length
     } :
-    { lat: 28.6139, lng: 77.2090 };
+    { lat: 28.6139, lng: 77.2090 });
   
   const zoom = 12;
 
@@ -539,11 +662,11 @@ function VehicleMap() {
   };
 
   const generateHeatmapData = () => {
-    if (!vehicles.length || !window.google?.maps?.LatLng) return;
+    if (!filteredVehicles.length || !window.google?.maps?.LatLng) return;
 
     const heatmapPoints = [];
     
-    vehicles.forEach(vehicle => {
+    filteredVehicles.forEach(vehicle => {
       const baseIntensity = Math.max(0.3, Math.min(1.0, 
         (vehicle.speed || 0) / 60 + 
         (100 - (vehicle.batteryLevel || 50)) / 200
@@ -579,6 +702,23 @@ function VehicleMap() {
     });
 
     setHeatmapData(heatmapPoints);
+  };
+
+  // Handle vehicle selection from search
+  const handleSearchVehicleSelect = (vehicle) => {
+    setSelectedVehicle(vehicle);
+    // Center map on selected vehicle
+    if (vehicle.latitude && vehicle.longitude) {
+      setUserLocation({ lat: vehicle.latitude, lng: vehicle.longitude });
+    }
+  };
+
+  // Handle add vehicle - make available to all users (remove role restriction)
+  const handleAddVehicle = () => {
+    // Remove role check - allow all users to add vehicles
+    // Navigate to vehicles tab using React state instead of hash navigation
+    const event = new CustomEvent('navigateToTab', { detail: 'vehicles' });
+    window.dispatchEvent(event);
   };
 
   return (
@@ -618,6 +758,61 @@ function VehicleMap() {
         </div>
       </div>
       
+      {/* Map Controls */}
+      <div className="map-controls">
+        <div className="control-group">
+          <select
+            className="select"
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+          >
+            <option value="all">All Vehicles</option>
+            <option value="available">Available</option>
+            <option value="on-trip">On Trip</option>
+            <option value="maintenance">Maintenance</option>
+            <option value="charging">Charging</option>
+            <option value="out-of-service">Out of Service</option>
+          </select>
+        </div>
+        
+        <div className="control-group">
+          <VehicleSearch onVehicleSelect={handleSearchVehicleSelect} />
+        </div>
+        
+        <div className="control-group row" style={{ gap: 8, alignItems: 'center' }}>
+          <input
+            type="checkbox"
+            id="nearby-toggle"
+            checked={showNearbyOnly}
+            onChange={(e) => setShowNearbyOnly(e.target.checked)}
+          />
+          <label htmlFor="nearby-toggle" style={{ color: '#e2e8f0', marginBottom: 0 }}>Nearby Only</label>
+          
+          {showNearbyOnly && (
+            <div className="row" style={{ gap: 4, alignItems: 'center' }}>
+              <label htmlFor="radius-input" style={{ color: '#e2e8f0', marginBottom: 0 }}>Within</label>
+              <input
+                type="number"
+                id="radius-input"
+                value={nearbyRadius}
+                onChange={(e) => setNearbyRadius(Number(e.target.value))}
+                min="1"
+                max="50"
+                style={{ width: 60, padding: '4px', borderRadius: 4, border: '1px solid #374151', background: '#0f172a', color: '#e2e8f0' }}
+              />
+              <span style={{ color: '#e2e8f0' }}>km</span>
+            </div>
+          )}
+        </div>
+        
+        {/* Remove role restriction - make add vehicle available to all users */}
+        <div className="control-group">
+          <button className="button primary" onClick={handleAddVehicle}>
+            ➕ Add Vehicle
+          </button>
+        </div>
+      </div>
+      
       {loading ? (
         <div style={{ height: 420, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <p>Loading map data...</p>
@@ -639,7 +834,7 @@ function VehicleMap() {
             }}
           >
             <MapComponent 
-              vehicles={vehicles} 
+              vehicles={filteredVehicles} 
               center={center} 
               zoom={zoom} 
               geofences={geofences}
@@ -647,12 +842,13 @@ function VehicleMap() {
               onVehicleSelect={handleVehicleSelect}
               showHeatmap={showHeatmap}
               heatmapData={heatmapData}
+              userLocation={userLocation}
             />
           </Wrapper>
           
           <div style={{ marginTop: 12 }}>
             <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-              {vehicles.map(vehicle => (
+              {filteredVehicles.map(vehicle => (
                 <button 
                   key={vehicle.id}
                   className={`button ${selectedVehicle?.id === vehicle.id ? 'primary' : 'outline'}`}
@@ -662,7 +858,7 @@ function VehicleMap() {
                   {vehicle.make} {vehicle.model}
                   {vehicle.batteryLevel && (
                     <span className="badge" style={{ marginLeft: 8 }}>
-                      {vehicle.batteryLevel}%
+                      {parseFloat(vehicle.batteryLevel).toFixed(2)}%
                     </span>
                   )}
                 </button>
@@ -671,6 +867,30 @@ function VehicleMap() {
           </div>
         </>
       )}
+      
+      <style>{`
+        .map-controls {
+          display: flex;
+          gap: 12px;
+          margin-bottom: 12px;
+          flex-wrap: wrap;
+          align-items: center;
+        }
+        
+        .control-group {
+          flex: 1;
+          min-width: 200px;
+        }
+        
+        .select {
+          width: 100%;
+          padding: 8px;
+          border-radius: 4px;
+          border: 1px solid #374151;
+          background-color: #0f172a;
+          color: #e2e8f0;
+        }
+      `}</style>
     </div>
   );
 }

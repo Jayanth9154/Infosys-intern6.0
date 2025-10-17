@@ -1,6 +1,6 @@
 com\neurofleet\security\SecurityConfig.class
-com\neurofleet\controller\VehicleController.class
 com\neurofleet\NeuroFleetApplication.class
+com\neurofleet\controller\BookingController.class
 com\neurofleet\controller\ProfileController.class
 com\neurofleet\security\FirebaseAuthenticationFilter.class
 com\neurofleet\websocket\RawWebSocketHandler.class

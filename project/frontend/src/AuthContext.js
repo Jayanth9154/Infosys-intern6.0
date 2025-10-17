@@ -16,7 +16,7 @@ export const AuthProvider = ({ children }) => {
       if (user) {
         try {
           // Get token result to access custom claims
-          const tokenResult = await getIdTokenResult(user, true); // force refresh to catch new claims
+          const tokenResult = await getIdTokenResult(user); // removed force refresh to avoid network issues
           setRole(tokenResult.claims.role || null);
         } catch (e) {
           console.error('Failed to get token claims:', e);

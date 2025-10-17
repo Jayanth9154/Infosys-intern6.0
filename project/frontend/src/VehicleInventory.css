@@ -1,0 +1,172 @@
+.battery-card {
+  background-color: #1f2937;
+  border-radius: 8px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid #374151;
+}
+
+.battery-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.battery-card.selected {
+  border: 2px solid #3b82f6;
+}
+
+.battery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border-bottom: 1px solid #374151;
+}
+
+.list-item:last-child {
+  border-bottom: none;
+}
+
+.list-item.selected {
+  background-color: rgba(59, 130, 246, 0.1);
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.button.small {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.battery-level-container {
+  height: 24px;
+  background-color: #374151;
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.battery-level-container.small {
+  height: 16px;
+  width: 100px;
+}
+
+.battery-level {
+  height: 100%;
+  transition: width 0.5s ease;
+}
+
+.battery-level.high {
+  background-color: #10b981;
+}
+
+.battery-level.medium {
+  background-color: #f59e0b;
+}
+
+.battery-level.low {
+  background-color: #ef4444;
+}
+
+.battery-percentage {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-weight: bold;
+}
+
+.battery-percentage.small {
+  font-size: 12px;
+}
+
+.battery-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-item {
+  display: flex;
+  justify-content: space-between;
+}
+
+.detail-label {
+  color: #9ca3af;
+}
+
+.detail-value {
+  font-weight: bold;
+}
+
+.panel {
+  background-color: #1f2937;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.panel h3 {
+  margin: 0 0 16px 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.select {
+  background: #0b1220;
+  color: #e5e7eb;
+  border: 1px solid #374151;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.input {
+  background: #0b1220;
+  color: #e5e7eb;
+  border: 1px solid #374151;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+@media (max-width: 768px) {
+  .row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .button.small {
+    width: 100%;
+  }
+  
+  .select, .input {
+    width: 100%;
+  }
+  
+  .battery-grid {
+    grid-template-columns: 1fr;
+  }
+}
